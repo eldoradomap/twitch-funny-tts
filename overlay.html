@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TTS Overlay</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: transparent;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 32px;
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+  }
+
+  #card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 480px;
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+  }
+
+  #card.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  #username {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 15px;
+    letter-spacing: 2.5px;
+    color: #bf94ff;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #username::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #bf94ff;
+    box-shadow: 0 0 8px #bf94ff;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  #message {
+    font-size: 17px;
+    font-weight: 500;
+    color: #ffffff;
+    line-height: 1.45;
+    text-shadow: 0 1px 12px rgba(0,0,0,0.8);
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-left: 3px solid #bf94ff;
+    padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="card">
+  <div id="username"></div>
+  <div id="message"></div>
+</div>
+
+<script>
+  // ── Update this when ngrok gives you a new URL ──
+  const WS_URL = "wss://lychnoscopic-kirk-cyathiform.ngrok-free.dev";
+
+  const card     = document.getElementById("card");
+  const username = document.getElementById("username");
+  const message  = document.getElementById("message");
+  let hideTimer  = null;
+
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  function show(user, text) {
+    clearTimeout(hideTimer);
+    username.textContent = user;
+    message.textContent  = text;
+    card.classList.add("visible");
+  }
+
+  function hide() {
+    card.classList.remove("visible");
+  }
+
+  async function playBase64Audio(base64) {
+    const binary  = atob(base64);
+    const bytes   = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+    const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+    const source      = audioCtx.createBufferSource();
+    source.buffer     = audioBuffer;
+    source.connect(audioCtx.destination);
+    source.start();
+  }
+
+  function connect() {
+    const ws = new WebSocket(WS_URL);
+
+    ws.onmessage = async (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "speaking") {
+        show(data.user, data.text);
+        try {
+          await playBase64Audio(data.audio);
+        } catch (err) {
+          console.error("Audio error:", err);
+        }
+      } else if (data.type === "clear") {
+        hideTimer = setTimeout(hide, 600);
+      }
+    };
+
+    ws.onclose = () => setTimeout(connect, 3000);
+    ws.onerror = () => ws.close();
+  }
+
+  connect();
+</script>
+</body>
+</html>
