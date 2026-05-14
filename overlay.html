@@ -110,8 +110,10 @@
     return new Promise((resolve) => {
       audio.src     = url;
       audio.onended = resolve;
-      audio.onerror = resolve;
-      audio.play().catch(resolve);
+      audio.onerror = (e) => { console.error("audio error:", e, audio.error); resolve(); };
+      audio.play()
+        .then(() => console.log("playing:", url))
+        .catch((e) => console.error("play failed:", e));
     });
   }
 
